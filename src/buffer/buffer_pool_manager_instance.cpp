@@ -49,6 +49,13 @@ BufferPoolManagerInstance::~BufferPoolManagerInstance() {
 
 bool BufferPoolManagerInstance::FlushPgImp(page_id_t page_id) {
   // Make sure you call DiskManager::WritePage!
+  std::lock_guard<std::mutex> lock(latch_);
+  auto search_iter = page_table_.find(page_id);
+  if (search_iter != page_table_.end()) {
+    Page *page = pages_ + search_iter->second;
+    disk_manager_->WritePage(page->GetPageId(), page->GetData());
+    return true;
+  }
   return false;
 }
 
@@ -62,6 +69,37 @@ Page *BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) {
   // 2.   Pick a victim page P from either the free list or the replacer. Always pick from the free list first.
   // 3.   Update P's metadata, zero out memory and add P to the page table.
   // 4.   Set the page ID output parameter. Return a pointer to P.
+  std::lock_guard<std::mutex> lock(latch_);
+  if (!free_list_.empty()) {
+    frame_id_t frame_id = free_list_.front();
+    free_list_.pop_front();
+    *page_id = AllocatePage();
+    Page *page = pages_ + frame_id;
+    // assert page metadata
+    assert(page->page_id_ == INVALID_PAGE_ID);
+    assert(!page->is_dirty_);
+    assert(page->pin_count_ == 0);
+    page->page_id_ = *page_id;
+    page_table_[page->page_id_] = frame_id;
+    return page;
+  }
+
+  frame_id_t frame_id;
+  if (replacer_->Victim(&frame_id)) {
+    Page *page = pages_ + frame_id;
+    if (page->IsDirty()) {
+      disk_manager_->WritePage(page->GetPageId(), page->GetData());
+      page->is_dirty_ = false;
+    }
+    assert(page->pin_count_ == 0);
+    page_table_.erase(page->page_id_);
+    *page_id = AllocatePage();
+    page->pin_count_ = 0;
+    page->page_id_ = *page_id;
+    page_table_[page->page_id_] = frame_id;
+    return page;
+  }
+
   return nullptr;
 }
 
@@ -73,6 +111,49 @@ Page *BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) {
   // 2.     If R is dirty, write it back to the disk.
   // 3.     Delete R from the page table and insert P.
   // 4.     Update P's metadata, read in the page content from disk, and then return a pointer to P.
+  std::lock_guard<std::mutex> lock(latch_);
+  auto search_iter = page_table_.find(page_id);
+  if (search_iter != page_table_.end()) {
+    Page *page = pages_ + search_iter->second;
+    disk_manager_->ReadPage(page->GetPageId(), page->GetData());
+    page->pin_count_ = 1;
+    replacer_->Pin(search_iter->second);
+    return page;
+  }
+  
+  if (!free_list_.empty()) {
+    frame_id_t frame_id = free_list_.front();
+    free_list_.pop_front();
+    Page *page = pages_ + frame_id;
+    assert(page->page_id_ == INVALID_PAGE_ID);
+    assert(!page->is_dirty_);
+    assert(page->pin_count_ == 0);
+    page->page_id_ = page_id;
+    disk_manager_->ReadPage(page->GetPageId(), page->GetData());
+    page->pin_count_ = 1;
+    replacer_->Pin(frame_id);
+    page_table_[page->page_id_] = frame_id;
+    return page;
+  }
+
+  frame_id_t frame_id;
+  if (replacer_->Victim(&frame_id)) {
+    Page *page = pages_ + frame_id;
+    assert(page->GetPinCount() == 0);
+    if (page->IsDirty()) {
+      disk_manager_->WritePage(page->GetPageId(), page->GetData());
+      page->is_dirty_ = false;
+    }
+    page_table_.erase(page->page_id_);
+
+    page->page_id_ = page_id;
+    disk_manager_->ReadPage(page->GetPageId(), page->GetData());
+    page->pin_count_ = 1;
+    replacer_->Pin(page->page_id_);
+    page_table_[page->page_id_] = frame_id;
+    return page;
+  }
+
   return nullptr;
 }
 
@@ -82,10 +163,40 @@ bool BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) {
   // 1.   If P does not exist, return true.
   // 2.   If P exists, but has a non-zero pin-count, return false. Someone is using the page.
   // 3.   Otherwise, P can be deleted. Remove P from the page table, reset its metadata and return it to the free list.
-  return false;
+
+  std::lock_guard<std::mutex> lock(latch_);
+  auto search_iter = page_table_.find(page_id);
+  if (search_iter == page_table_.end()) {
+    return true;
+  }
+
+  Page *page = pages_ + search_iter->second;
+  if (page->GetPinCount() != 0) {
+    return false;
+  }
+
+  page->is_dirty_ = false;
+  page->page_id_ = INVALID_PAGE_ID;
+  page->pin_count_ = 0;
+  page->ResetMemory();
+  DeallocatePage(search_iter->first);
+  free_list_.push_back(search_iter->second);
+  page_table_.erase(search_iter);
+  return true;
 }
 
-bool BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) { return false; }
+bool BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) { 
+  std::lock_guard<std::mutex> lock(latch_);
+  auto search_iter = page_table_.find(page_id);
+  if (search_iter != page_table_.end()) {
+    Page *page = pages_ + search_iter->second;
+    page->is_dirty_ = is_dirty;
+    page->pin_count_ = 0;
+    replacer_->Unpin(search_iter->second);
+    return true;
+  }
+  return false; 
+}
 
 page_id_t BufferPoolManagerInstance::AllocatePage() {
   const page_id_t next_page_id = next_page_id_;
