@@ -22,11 +22,9 @@ namespace bustub {
 class BufferPoolManager;
 
 class BufferPoolManagerHolder {
-public:
-  explicit BufferPoolManagerHolder(BufferPoolManager *buffer_pool_manager) 
-  :buffer_pool_manager_(buffer_pool_manager){
-
-  }
+ public:
+  explicit BufferPoolManagerHolder(BufferPoolManager *buffer_pool_manager)
+      : buffer_pool_manager_(buffer_pool_manager) {}
 
   ~BufferPoolManagerHolder() { delete buffer_pool_manager_; }
 
@@ -104,12 +102,12 @@ class ParallelBufferPoolManager : public BufferPoolManager {
    */
   void FlushAllPgsImp() override;
 
-private:
- typedef std::unique_ptr<BufferPoolManager> BufferPoolManagerPtr;
- typedef std::vector<BufferPoolManagerPtr> BufferPoolManagerVector;
+ private:
+  typedef std::unique_ptr<BufferPoolManager> BufferPoolManagerPtr;
+  typedef std::vector<BufferPoolManagerPtr> BufferPoolManagerVector;
 
- size_t num_instances_;
- BufferPoolManagerVector buffer_pool_managers_;
- size_t next_buffer_index_;
+  size_t num_instances_;
+  BufferPoolManagerVector buffer_pool_managers_;
+  size_t next_buffer_index_;
 };
 }  // namespace bustub

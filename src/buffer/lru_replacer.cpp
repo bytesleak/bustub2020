@@ -14,16 +14,11 @@
 
 namespace bustub {
 
-LRUReplacer::LRUReplacer(size_t num_pages) 
- :num_pages_(num_pages),
-  free_list_(),
-  frame_table_() {
-
-  }
+LRUReplacer::LRUReplacer(size_t num_pages) : num_pages_(num_pages), free_list_(), frame_table_() {}
 
 LRUReplacer::~LRUReplacer() = default;
 
-bool LRUReplacer::Victim(frame_id_t *frame_id) { 
+bool LRUReplacer::Victim(frame_id_t *frame_id) {
   LockGuard lock(latch_);
   if (free_list_.empty()) {
     return false;
@@ -33,7 +28,7 @@ bool LRUReplacer::Victim(frame_id_t *frame_id) {
   free_list_.pop_back();
   frame_table_.erase(*frame_id);
 
-  return true; 
+  return true;
 }
 
 void LRUReplacer::Pin(frame_id_t frame_id) {
@@ -58,16 +53,16 @@ void LRUReplacer::Unpin(frame_id_t frame_id) {
     if (free_list_.size() == num_pages_) {
       return;
     }
-  
+
     // allocate free frame
-     free_list_.push_front(frame_id);
+    free_list_.push_front(frame_id);
     // mapping frame_id and iterator
     frame_table_[frame_id] = free_list_.begin();
   }
 }
 
-size_t LRUReplacer::Size() { 
+size_t LRUReplacer::Size() {
   LockGuard lock(latch_);
   return free_list_.size();
 }  // namespace bustub
-}
+}  // namespace bustub

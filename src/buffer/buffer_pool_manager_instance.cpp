@@ -120,7 +120,7 @@ Page *BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) {
     replacer_->Pin(search_iter->second);
     return page;
   }
-  
+
   if (!free_list_.empty()) {
     frame_id_t frame_id = free_list_.front();
     free_list_.pop_front();
@@ -185,7 +185,7 @@ bool BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) {
   return true;
 }
 
-bool BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) { 
+bool BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) {
   std::lock_guard<std::mutex> lock(latch_);
   auto search_iter = page_table_.find(page_id);
   if (search_iter != page_table_.end()) {
@@ -195,7 +195,7 @@ bool BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) {
     replacer_->Unpin(search_iter->second);
     return true;
   }
-  return false; 
+  return false;
 }
 
 page_id_t BufferPoolManagerInstance::AllocatePage() {
