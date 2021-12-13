@@ -27,23 +27,48 @@ namespace bustub {
  * next page id and set max size
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(page_id_t page_id, page_id_t parent_id, int max_size) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(page_id_t page_id, page_id_t parent_id, int max_size) {
+  SetPageType(IndexPageType::LEAF_PAGE);
+  SetSize(0);
+  SetPageId(page_id);
+  SetParentPageId(parent_id);
+  SetMaxSize(max_size);
+  SetNextPageId(INVALID_PAGE_ID);
+}
 
 /**
  * Helper methods to set/get next page id
  */
 INDEX_TEMPLATE_ARGUMENTS
-page_id_t B_PLUS_TREE_LEAF_PAGE_TYPE::GetNextPageId() const { return INVALID_PAGE_ID; }
+page_id_t B_PLUS_TREE_LEAF_PAGE_TYPE::GetNextPageId() const { return next_page_id_; }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) { next_page_id_ = next_page_id; }
 
 /**
  * Helper method to find the first index i so that array[i].first >= key
  * NOTE: This method is only used when generating index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &comparator) const { return 0; }
+int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &comparator) const {
+  // lower bound search in range [0, GetSize())
+  int left = 0;
+  int right = GetSize();
+  int mid = 0;
+  int cmp_result = -1;
+  while (left < right) {
+    mid = (right - left) / 2 + left;
+    cmp_result = comparator(array_[mid].first, key);
+    if (cmp_result == 0)
+      right = mid;
+    else if (cmp_result < 0)
+      left = mid + 1;
+    else if (cmp_result > 0)
+      right = mid;
+  }
+  if (left == GetSize()) || (comparator(array_[left].first, key) != 0) return -1;
+  return left;
+}
 
 /*
  * Helper method to find and return the key associated with input "index"(a.k.a
@@ -51,9 +76,8 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator
  */
 INDEX_TEMPLATE_ARGUMENTS
 KeyType B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const {
-  // replace with your own code
-  KeyType key{};
-  return key;
+  assert(index >= 0 && index < GetSize());
+  return array_[index].first;
 }
 
 /*
@@ -62,8 +86,8 @@ KeyType B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const {
  */
 INDEX_TEMPLATE_ARGUMENTS
 const MappingType &B_PLUS_TREE_LEAF_PAGE_TYPE::GetItem(int index) {
-  // replace with your own code
-  return array_[0];
+  assert(index >= 0 && index < GetSize());
+  return array_[index];
 }
 
 /*****************************************************************************
