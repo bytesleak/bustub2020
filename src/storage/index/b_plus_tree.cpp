@@ -212,6 +212,27 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::End() { return INDEXITERATOR_TYPE(); }
  */
 INDEX_TEMPLATE_ARGUMENTS
 Page *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost) {
+  Page *root_page = buffer_pool_manager_->FetchPage(root_page_id_);
+  if (root_page == nullptr) {
+    return nullptr;
+  }
+
+  BPlusTreePage* tree_page = reinterpret_cast<BPlusTreePage*>(root_page);
+  assert(tree_page != nullptr);
+  page_id_t  page_id;
+  while(!tree_page->IsLeafPage()) {
+    BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>  * internal_page = static_cast<BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>  *>(tree_page);
+    assert(internal_page != nullptr);
+    page_id = internal_page->Lookup(key, comparator_);
+
+    if (page_id == INVALID_PAGE_ID) {
+
+    } else if (page_id == )
+  }
+
+  assert(tree_page->IsLeafPage());
+
+
   throw Exception(ExceptionType::NOT_IMPLEMENTED, "Implement this for test");
 }
 
