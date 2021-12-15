@@ -42,6 +42,13 @@ bool BPLUSTREE_TYPE::IsEmpty() const { return true; }
  */
 INDEX_TEMPLATE_ARGUMENTS
 bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) {
+  Page* page = FindLeafPage(key, false);
+  if (page == nullptr) {
+    return false;
+  }
+
+  BPlusTreeLeafPage<KeyType
+
   return false;
 }
 
@@ -212,7 +219,29 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::End() { return INDEXITERATOR_TYPE(); }
  */
 INDEX_TEMPLATE_ARGUMENTS
 Page *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost) {
-  throw Exception(ExceptionType::NOT_IMPLEMENTED, "Implement this for test");
+  Page* page = buffer_pool_manager_->FetchPage(root_page_id_);
+  BPlusTreePage* tree_page = reinterpret_cast<BPlusTreePage*>(page);
+  while(!tree_page->IsLeafPage()) {
+    BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator> * tree_internal_page =
+        static_cast<BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>*>(tree_page);
+    assert(tree_internal_page != nullptr);
+
+    page_id_t page_id;
+    if (leftMost) {
+      page_id = tree_internal_page->ValueAt(1);
+    } else {
+      page_id = tree_internal_page->Lookup(key, comparator_);
+    }
+
+    page = buffer_pool_manager_->FetchPage(page_id);
+    assert(page != nullptr);
+    tree_page = reinterpret_cast<BPlusTreePage*>(page);
+    assert(tree_page != nullptr);
+  }
+
+  assert(tree_page->IsLeafPage());
+  return page;
+  /// throw Exception(ExceptionType::NOT_IMPLEMENTED, "Implement this for test");
 }
 
 /*

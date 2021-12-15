@@ -84,19 +84,24 @@ ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const {
  */
 INDEX_TEMPLATE_ARGUMENTS
 ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key, const KeyComparator &comparator) const {
-  // search in range [1, GetSize() - 1]
-  int left = 1, right = GetSize() - 1, mid = 0;
+  /// Lookup the lower bound of the key in [1, GetSize() - 1] range.
+  int left = 1;
+  int right = GetSize() - 1;
+  int mid;
+  int cmp;
   while (left <= right) {
     mid = (right - left) / 2 + left;
-    int result = comparator(array_[mid].first, key);
-    if (result == 0)
-      return array_[mid].second;
-    else if (result < 0)
-      left = mid + 1;
-    else if (result > 0)
-      right = mid - 1;
+    cmp = comparator(key, array_[mid].first);
+    if (cmp == 0) {
+      /// see if the next one is equal?
+      left = mid - 1;
+    } else if (cmp < 0) {
+      left = mid - 1;
+    } else if (cmp > 0) {
+      right = mid + 1;
+    }
   }
-  return array_[0].second;
+  return array_[left-1].second;
 }
 
 /*****************************************************************************
