@@ -51,23 +51,21 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) { next_pa
  */
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &comparator) const {
-  // lower bound search in range [0, GetSize())
+  // lower bound search in range [0, GetSize()-1]
   int left = 0;
-  int right = GetSize();
-  int mid = 0;
-  int cmp_result = -1;
-  while (left < right) {
+  int right = GetSize() - 1;
+  int mid;
+  int cmp_result;
+  while (left <= right) {
     mid = (right - left) / 2 + left;
     cmp_result = comparator(array_[mid].first, key);
-    if (cmp_result == 0)
-      right = mid;
-    else if (cmp_result < 0)
+    if (cmp_result >= 0) {
+      right = mid - 1;
+    } else if (cmp_result < 0)
       left = mid + 1;
-    else if (cmp_result > 0)
-      right = mid;
   }
-  if (left == GetSize()) || (comparator(array_[left].first, key) != 0) return -1;
-  return left;
+
+  return right + 1;
 }
 
 /*
@@ -127,7 +125,15 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {}
  */
 INDEX_TEMPLATE_ARGUMENTS
 bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType *value, const KeyComparator &comparator) const {
-  return false;
+  int index = KeyIndex(key, comparator);
+  if (index >= GetSize()) {
+    return false;
+  }
+  if (comparator(key, array_[index].first) != 0) {
+    return false;
+  }
+  *value = array_[index].second;
+  return true;
 }
 
 /*****************************************************************************
