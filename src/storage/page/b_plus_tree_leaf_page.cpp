@@ -52,20 +52,22 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) { next_pa
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &comparator) const {
   // lower bound search in range [0, GetSize()-1]
-  int left = 0;
-  int right = GetSize() - 1;
+  int l = 0;
+  int r = GetSize() - 1;
   int mid;
   int cmp_result;
-  while (left <= right) {
-    mid = (right - left) / 2 + left;
+  while (l <= r) {
+    mid = (r - l) / 2 + l;
     cmp_result = comparator(array_[mid].first, key);
-    if (cmp_result >= 0) {
-      right = mid - 1;
-    } else if (cmp_result < 0)
-      left = mid + 1;
+    if (cmp_result < 0) {
+      l = mid + 1;
+    } else if (cmp_result >= 0) {
+      r = mid - 1;
+    }
   }
 
-  return right + 1;
+  /// l > r or r < l
+  return r + 1;
 }
 
 /*
@@ -74,7 +76,6 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator
  */
 INDEX_TEMPLATE_ARGUMENTS
 KeyType B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const {
-  assert(index >= 0 && index < GetSize());
   return array_[index].first;
 }
 
@@ -97,7 +98,24 @@ const MappingType &B_PLUS_TREE_LEAF_PAGE_TYPE::GetItem(int index) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator) {
-  return 0;
+  /// 1. search array[i].first >= key
+  int index = KeyIndex(key, comparator);
+  std::printf("leaf key index: %d\n", index);
+  /// 2. move the element after the index by one place
+  for (int i = GetSize() - 1; i > index; --i) {
+    array_[i].first = array_[i - 1].first;
+    array_[i].second = array_[i - 1].second;
+  }
+
+  /// 3. insert the key & value
+  array_[index].first = key;
+  array_[index].second = value;
+
+  /// 4. increment array size
+  IncreaseSize(1);
+
+  /// 5. return actual array size
+  return GetSize();
 }
 
 /*****************************************************************************
@@ -107,13 +125,43 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &valu
  * Remove half of key & value pairs from this page to "recipient" page
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
+  ///    +---+---+---+---+---+---+
+  ///    | A | B | C | D | E | F |
+  ///    +---+---+---+---+---+---+
+  ///              |   |
+  ///              |   +----move half--+
+  ///              v                   v
+  ///    +---+---+---+           +---+---+---+
+  ///    | A | B | C |           | D | E | F |
+  ///    +---+---+---+           +---+---+---+
+
+  /// move node.p[n/2] + 1 into recipient
+  int half_size = GetSize() / 2;
+  recipient->CopyNFrom(array_ + half_size, GetSize() - half_size);
+
+  // for (int i = half_index; i < GetSize(); i++) {
+  //   recipient->CopyNFrom(&array_[i], i - half_index);
+  // }
+
+  recipient->SetSize(GetSize() - half_size);
+  SetSize(half_size);
+
+  /// set sibling node
+  recipient->SetNextPageId(GetNextPageId());
+  SetNextPageId(recipient->GetPageId());
+}
 
 /*
  * Copy starting from items, and copy {size} number of elements into me.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {
+  for (int i = 0; i < size; ++i) {
+    array_[i].first = (items + i)->first;
+    array_[i].second = (items + i)->second;
+  }
+}
 
 /*****************************************************************************
  * LOOKUP
@@ -126,12 +174,16 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {}
 INDEX_TEMPLATE_ARGUMENTS
 bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType *value, const KeyComparator &comparator) const {
   int index = KeyIndex(key, comparator);
+  /// index overflow
   if (index >= GetSize()) {
     return false;
   }
+
+  /// not equal
   if (comparator(key, array_[index].first) != 0) {
     return false;
   }
+
   *value = array_[index].second;
   return true;
 }

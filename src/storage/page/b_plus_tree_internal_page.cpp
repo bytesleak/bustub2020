@@ -71,7 +71,6 @@ INDEX_TEMPLATE_ARGUMENTS
 ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const {
   assert(index >= 0 && index < GetSize());
   return array_[index].second;
-  return 0;
 }
 
 /*****************************************************************************
@@ -84,44 +83,29 @@ ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const {
  */
 INDEX_TEMPLATE_ARGUMENTS
 ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key, const KeyComparator &comparator) const {
-<<<<<<< HEAD
   /// search in range [1, GetSize() - 1]
-  int left = 1;
-  int right = GetSize() - 1;
+  int l = 1;
+  int r = GetSize() - 1;
   int mid = 0;
   int cmp = -1;
-  while (left <= right) {
-    mid = (right - left) / 2 + left;
-    cmp = comparator(array_[mid].first, key);
-    if (cmp == 0) {
-      return array_[0].second;
-    } else if (cmp > 0) {
-      right = mid - 1;
-    } else if (cmp < 0) {
-      left = mid + 1;
-    }
-  }
-  return array_[left].second;
-=======
-  /// Lookup the lower bound of the key in [1, GetSize() - 1] range.
-  int left = 1;
-  int right = GetSize() - 1;
-  int mid;
-  int cmp;
-  while (left <= right) {
-    mid = (right - left) / 2 + left;
+  while (l <= r) {
+    mid = (r - l) / 2 + l;
     cmp = comparator(key, array_[mid].first);
     if (cmp == 0) {
-      /// see if the next one is equal?
-      left = mid - 1;
-    } else if (cmp < 0) {
-      left = mid - 1;
-    } else if (cmp > 0) {
-      right = mid + 1;
+      return array_[mid].second;
+    } else if (cmp < 0) {  /// key < array_[mid].first
+      r = mid - 1;
+    } else if (cmp > 0) {  /// key > array_[mid].first
+      l = mid + 1;
     }
   }
-  return array_[left-1].second;
->>>>>>> 1d6cd4b3d7d68848d346a06120347a1ea002a823
+  /// If l = 1, it means the left boundary is found, return l,
+  /// otherwise it means l > r, and r means the right boundary, return l - 1
+  if (l == 1) {
+    return array_[l].second;
+  }
+
+  return array_[l - 1].second;
 }
 
 /*****************************************************************************
@@ -135,7 +119,13 @@ ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key, const KeyCo
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::PopulateNewRoot(const ValueType &old_value, const KeyType &new_key,
-                                                     const ValueType &new_value) {}
+                                                     const ValueType &new_value) {
+  /// 根据约定, internal page 第一个 key 是无效的, 但是 value是有效的
+  array_[0].second = old_value;
+  array_[1].first = new_key;
+  array_[1].second = new_value;
+  SetSize(2);
+}
 /*
  * Insert new_key & new_value pair right after the pair with its value ==
  * old_value
@@ -144,7 +134,16 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::PopulateNewRoot(const ValueType &old_value,
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertNodeAfter(const ValueType &old_value, const KeyType &new_key,
                                                     const ValueType &new_value) {
-  return 0;
+  int old_value_index = ValueIndex(old_value);
+  /// insert new_key and new_value after the old_value_index
+  for (int i = GetSize() - 1; i >= old_value_index + 1; i--) {
+    array_[i+1] = array_[i];
+  }
+
+  array_[old_value_index + 1].first = new_key;
+  array_[old_value_index + 1].second = new_value;
+  IncreaseSize(1);
+  return GetSize();
 }
 
 /*****************************************************************************
@@ -155,14 +154,37 @@ int B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertNodeAfter(const ValueType &old_value, 
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient,
-                                                BufferPoolManager *buffer_pool_manager) {}
+                                                BufferPoolManager *buffer_pool_manager) {
+  /// 在 <<数据库系统概念 7th>> 中, 父节点分裂时, recipient 第一个key是被跳过的,
+  /// 即 node 复制 [T.P1 ... T.P(n+1)/2], recipient 复制 [T.P[(n+1)/2]+1 ... T.P(n+1)]
+  /// 这样recipient 跳过了第一个key, 因为这个key要插入到父节点.
+  ///
+  /// 在bustub中, array_ 第一个key总是无效的, 但value (page_id, 或者说指针) 是有效的, 这样简化了父
+  /// 节点split过程的处理
+  int half_size = GetSize() / 2;
+  recipient->CopyNFrom(array_ + half_size, GetSize() - half_size, buffer_pool_manager);
+
+  recipient->SetSize(GetSize() - half_size);
+  SetSize(half_size);
+}
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
  * Since it is an internal page, for all entries (pages) moved, their parents page now changes to me.
  * So I need to 'adopt' them by changing their parent page id, which needs to be persisted with BufferPoolManger
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNFrom(MappingType *items, int size, BufferPoolManager *buffer_pool_manager) {}
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNFrom(MappingType *items, int size, BufferPoolManager *buffer_pool_manager) {
+  for (int i = 0; i < size; ++i) {
+    array_[i].first = (items+i)->first;
+    array_[i].second = (items+i)->second;
+    /// 指向子节点的page_id对应的父节点(也就是我)已经移动, 要更改他们(子节点) 指向的父节点(我):
+    /// 通过buffer_pool_manager 查找, 设置父节点, 并unpin dirty (parent_page_id) 已经修改
+    Page* page = buffer_pool_manager->FetchPage(array_[i].second);
+    BPlusTreePage *b_plus_tree_page_ptr = reinterpret_cast<BPlusTreePage*>(page->GetData());
+    b_plus_tree_page_ptr->SetParentPageId(GetPageId());
+    buffer_pool_manager->UnpinPage(array_[i].second, true);
+  }
+}
 
 /*****************************************************************************
  * REMOVE
