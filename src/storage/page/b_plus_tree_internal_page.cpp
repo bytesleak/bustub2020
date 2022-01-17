@@ -135,14 +135,15 @@ INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertNodeAfter(const ValueType &old_value, const KeyType &new_key,
                                                     const ValueType &new_value) {
   int old_value_index = ValueIndex(old_value);
+  int after_index = old_value_index + 1;
   /// insert new_key and new_value after the old_value_index
-  for (int i = GetSize() - 1; i >= old_value_index + 1; i--) {
+  for (int i = GetSize() - 1; i >= after_index; i--) {
     array_[i+1] = array_[i];
   }
 
-  array_[old_value_index + 1].first = new_key;
-  array_[old_value_index + 1].second = new_value;
-  IncreaseSize(1);
+  array_[after_index].first = new_key;
+  array_[after_index].second = new_value;
+   IncreaseSize(1);
   return GetSize();
 }
 
@@ -162,10 +163,10 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
   /// 在bustub中, array_ 第一个key总是无效的, 但value (page_id, 或者说指针) 是有效的, 这样简化了父
   /// 节点split过程的处理
   int half_size = GetSize() / 2;
-  recipient->CopyNFrom(array_ + half_size, GetSize() - half_size, buffer_pool_manager);
-
-  recipient->SetSize(GetSize() - half_size);
-  SetSize(half_size);
+  std::cout << "size = " << GetSize() << ", half_size = " << half_size << ", moved_size = " << GetSize() - half_size << std::endl;
+  recipient->CopyNFrom(array_ + GetSize() - half_size, half_size, buffer_pool_manager);
+  recipient->IncreaseSize(half_size);
+  IncreaseSize(-half_size);
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
@@ -175,6 +176,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNFrom(MappingType *items, int size, BufferPoolManager *buffer_pool_manager) {
   for (int i = 0; i < size; ++i) {
+    std::cout <<  "move " << (items+i)->first << std::endl;
     array_[i].first = (items+i)->first;
     array_[i].second = (items+i)->second;
     /// 指向子节点的page_id对应的父节点(也就是我)已经移动, 要更改他们(子节点) 指向的父节点(我):

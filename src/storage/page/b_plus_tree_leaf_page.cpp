@@ -51,7 +51,6 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) { next_pa
  */
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &comparator) const {
-  // lower bound search in range [0, GetSize()-1]
   int l = 0;
   int r = GetSize() - 1;
   int mid;
@@ -100,7 +99,6 @@ INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator) {
   /// 1. search array[i].first >= key
   int index = KeyIndex(key, comparator);
-  std::printf("leaf key index: %d\n", index);
   /// 2. move the element after the index by one place
   for (int i = GetSize() - 1; i > index; --i) {
     array_[i].first = array_[i - 1].first;
