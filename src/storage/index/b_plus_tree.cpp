@@ -51,7 +51,9 @@ bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   B_PLUS_TREE_LEAF_PAGE_TYPE *tree_leaf_page = reinterpret_cast<B_PLUS_TREE_LEAF_PAGE_TYPE *>(page);
 
   // 2. lookup key corresponding value
-  if (tree_leaf_page->Lookup(key, &(*result)[0], comparator_)) {
+  ValueType val;
+  if (tree_leaf_page->Lookup(key, &val, comparator_)) {
+    result->push_back(val);
     // 3. unpin page
     return buffer_pool_manager_->UnpinPage(page->GetPageId(), page->IsDirty());
   }
@@ -200,7 +202,7 @@ void BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_node, const KeyType &ke
 
   int size = parent_internal_page->InsertNodeAfter(old_node->GetPageId(),
                                                    key, new_node->GetPageId());
-  if (size == parent_internal_page->GetMaxSize()) {
+  if (size == parent_internal_page->GetMaxSize() + 1) {
     BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator> *new_internal_page = Split(parent_internal_page);
 //    BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator> *old_internal_page =
 //        static_cast<BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>* >(old_node);

@@ -93,7 +93,8 @@ ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key, const KeyCo
     cmp = comparator(key, array_[mid].first);
     if (cmp == 0) {
       return array_[mid].second;
-    } else if (cmp < 0) {  /// key < array_[mid].first
+    }
+    if (cmp < 0) {  /// key < array_[mid].first
       r = mid - 1;
     } else if (cmp > 0) {  /// key > array_[mid].first
       l = mid + 1;
@@ -101,10 +102,6 @@ ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key, const KeyCo
   }
   /// If l = 1, it means the left boundary is found, return l,
   /// otherwise it means l > r, and r means the right boundary, return l - 1
-  if (l == 1) {
-    return array_[l].second;
-  }
-
   return array_[l - 1].second;
 }
 
@@ -163,10 +160,12 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
   /// 在bustub中, array_ 第一个key总是无效的, 但value (page_id, 或者说指针) 是有效的, 这样简化了父
   /// 节点split过程的处理
   int half_size = GetSize() / 2;
-  std::cout << "size = " << GetSize() << ", half_size = " << half_size << ", moved_size = " << GetSize() - half_size << std::endl;
-  recipient->CopyNFrom(array_ + GetSize() - half_size, half_size, buffer_pool_manager);
-  recipient->IncreaseSize(half_size);
+  /// [0...n/2]
+  /// recipient is [n/2+1...n]
+  recipient->CopyNFrom(array_ + half_size, GetSize() - half_size, buffer_pool_manager);
   IncreaseSize(-half_size);
+//  recipient->SetSize(half_size);
+//  SetSize(GetSize() - half_size);
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
@@ -176,9 +175,10 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNFrom(MappingType *items, int size, BufferPoolManager *buffer_pool_manager) {
   for (int i = 0; i < size; ++i) {
-    std::cout <<  "move " << (items+i)->first << std::endl;
-    array_[i].first = (items+i)->first;
-    array_[i].second = (items+i)->second;
+    array_[i] = {(items + i)->first, (items + i)->second};
+    IncreaseSize(1);
+//    array_[i].first = (items+i)->first;
+//    array_[i].second = (items+i)->second;
     /// 指向子节点的page_id对应的父节点(也就是我)已经移动, 要更改他们(子节点) 指向的父节点(我):
     /// 通过buffer_pool_manager 查找, 设置父节点, 并unpin dirty (parent_page_id) 已经修改
     Page* page = buffer_pool_manager->FetchPage(array_[i].second);
